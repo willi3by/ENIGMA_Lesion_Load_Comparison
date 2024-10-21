@@ -1,0 +1,58 @@
+---
+title: "STRONG_Analysis"
+author: "Brady Williamson"
+date: "2024-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(performance)
+library(datawizard)
+library(xlsx)
+```
+
+```{r functions}
+scale_0_to_1 <- function(x) {
+(x - min(x)) / (max(x) - min(x))
+}
+```
+
+```{r prep_data}
+lesion_load_df = read.csv('path_to_lesion_load_df')
+m1_cc_df = read.csv('path_to_m1_cc_df')
+demos_df = read.xlsx('path_to_demos', 1)
+site_df = read.xlsx('path_to_site_df', 1)
+colnames(demos_df)[1] <- colnames(lesion_load_df)[1]
+colnames(site_df)[1] <- colnames(lesion_load_df)[1]
+
+lesion_load_df$Lesion_Volume = log(lesion_load_df$Lesion_Volume + 1)
+lesion_left <- ifelse(lesion_load_df$HCPA_Left > lesion_load_df$HCPA_Right, 1, 2)
+lesion_load_df$Lesion.Side <- lesion_left
+lesion_bilat = ifelse(lesion_load_df$HCPA_Left > 0 & lesion_load_df$HCPA_Right > 0, 1, 0)
+lesion_load_df <- lesion_load_df[-which(lesion_bilat == 1),]
+lesion_load_df$Total_Percsub_Cramer = lesion_load_df$Cramer_Left + lesion_load_df$Cramer_Right
+lesion_load_df$Total_Percsub_HCP = lesion_load_df$HCP_Left + lesion_load_df$HCP_Right
+lesion_load_df$Total_Percsub_HCPA = lesion_load_df$HCPA_Left + lesion_load_df$HCPA_Right
+lesion_load_df$Total_Radial_Cramer = lesion_load_df$Radial_Cramer_Left + lesion_load_df$Radial_Cramer_Right
+lesion_load_df$Total_Radial_HCP = lesion_load_df$Radial_HCP_Left + lesion_load_df$Radial_HCP_Right
+lesion_load_df$Total_Radial_HCPA = lesion_load_df$Radial_HCPA_Left + lesion_load_df$Radial_HCPA_Right
+lesion_load_df$Total_WLL_Cramer = lesion_load_df$WLL_Cramer_Left + lesion_load_df$WLL_Cramer_Right
+lesion_load_df$Total_WLL_HCP = lesion_load_df$WLL_HCP_Left + lesion_load_df$WLL_HCP_Right
+lesion_load_df$Total_WLL_HCPA = lesion_load_df$WLL_HCPA_Left + lesion_load_df$WLL_HCPA_Right
+lesion_load_df$Total_Max_WLL_Cramer = lesion_load_df$Max_WLL_Cramer_Left + lesion_load_df$Max_WLL_Cramer_Right
+lesion_load_df$Total_Max_WLL_HCP = lesion_load_df$Max_WLL_HCP_Left + lesion_load_df$Max_WLL_HCP_Right
+lesion_load_df$Total_Max_WLL_HCPA = lesion_load_df$Max_WLL_HCPA_Left + lesion_load_df$Max_WLL_HCPA_Right
+m1_cc_df$Total_M1 = m1_cc_df$Left_M1 + m1_cc_df$Right_M1
+demos_and_ll_df = merge(demos_df, lesion_load_df, by="Subject")
+demos_and_ll_df = merge(demos_and_ll_df, m1_cc_df, by="Subject")
+demos_and_ll_df = merge(demos_and_ll_df, site_df, by="Subject")
+
+demos_and_ll_df <- demos_and_ll_df[-which(demos_and_ll_df$StrokeSubtype_0Ischem_1ICH == 1),]
+
+modeling_df <- demos_and_ll_df[-which(is.na(demos_and_ll_df$v2_FMtotal)),]
+modeling_df <- modeling_df[,c(1, 4, 6, 7, 32:51)]
+modeling_df[,c(2:4, 6:23)] <- apply(modeling_df[,c(2:4, 6:23)], 2, scale)
+
+
+```

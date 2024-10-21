@@ -1,0 +1,65 @@
+---
+title: "ENIGMA_Analysis"
+author: "Brady Williamson"
+date: "2024-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(performance)
+library(datawizard)
+library(xlsx)
+```
+
+```{r functions}
+scale_0_to_1 <- function(x) {
+(x - min(x)) / (max(x) - min(x))
+}
+```
+
+```{r prep_data}
+lesion_load_df = read.csv('path_to_lesion_load')
+lesion_vol_df = read.csv('path_to_lesion_vol')
+lesion_loc_df = read.xlsx('path_to_lesion_loc',3)
+m1_cc_df = read.csv('path_to_cc_df')
+lesion_vol_df$Lesion_Volume = log(lesion_vol_df$Lesion_Volume + 1)
+demos_df = read.csv("path_to_demos")
+colnames(demos_df)[1] <- colnames(lesion_load_df)[1]
+reduced_demos_df = demos_df[,c(1,4:9, 12, 17, 61)]
+lesion_load_df$Total_Percsub_Cramer = lesion_load_df$Cramer_Left + lesion_load_df$Cramer_Right
+lesion_load_df$Total_Percsub_HCP = lesion_load_df$HCP_Left + lesion_load_df$HCP_Right
+lesion_load_df$Total_Percsub_HCPA = lesion_load_df$HCPA_Left + lesion_load_df$HCPA_Right
+lesion_load_df$Total_Radial_Cramer = lesion_load_df$Radial_Cramer_Left + lesion_load_df$Radial_Cramer_Right
+lesion_load_df$Total_Radial_HCP = lesion_load_df$Radial_HCP_Left + lesion_load_df$Radial_HCP_Right
+lesion_load_df$Total_Radial_HCPA = lesion_load_df$Radial_HCPA_Left + lesion_load_df$Radial_HCPA_Right
+lesion_load_df$Total_WLL_Cramer = lesion_load_df$WLL_Cramer_Left + lesion_load_df$WLL_Cramer_Right
+lesion_load_df$Total_WLL_HCP = lesion_load_df$WLL_HCP_Left + lesion_load_df$WLL_HCP_Right
+lesion_load_df$Total_WLL_HCPA = lesion_load_df$WLL_HCPA_Left + lesion_load_df$WLL_HCPA_Right
+lesion_load_df$Total_Max_WLL_Cramer = lesion_load_df$Max_WLL_Cramer_Left + lesion_load_df$Max_WLL_Cramer_Right
+lesion_load_df$Total_Max_WLL_HCP = lesion_load_df$Max_WLL_HCP_Left + lesion_load_df$Max_WLL_HCP_Right
+lesion_load_df$Total_Max_WLL_HCPA = lesion_load_df$Max_WLL_HCPA_Left + lesion_load_df$Max_WLL_HCPA_Right
+m1_cc_df$Total_M1 = m1_cc_df$Left_M1 + m1_cc_df$Right_M1
+reduced_lesion_load_df = lesion_load_df[,c(1, 26:37)]
+lesion_df = merge(reduced_lesion_load_df, lesion_vol_df, by="Subject")
+demos_and_ll_df = merge(reduced_demos_df, lesion_df, by="Subject")
+demos_and_ll_df = merge(demos_and_ll_df, lesion_loc_df, by="Subject")
+demos_and_ll_df = merge(demos_and_ll_df, m1_cc_df, by="Subject")
+
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$Lesion.Location == 3),]
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$Lesion.Location == 4),]
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$LesionSide == 3),]
+
+modeling_df = demos_and_ll_df[,c(1:7, 10:31)]
+modeling_df = na.omit(modeling_df)
+# fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "FMUE_TOTAL" | modeling_df$NORMED_MOTOR_SOURCE == "MBI")
+# fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "FMUE_TOTAL")
+fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "MBI")
+modeling_df = modeling_df[fmue_and_mbi_idxs,]
+low_n_sites <- names(which(table(modeling_df$SITE) < 5))
+modeling_df <- modeling_df[-which(modeling_df$SITE %in% low_n_sites),]
+modeling_df$SEX = as.factor(modeling_df$SEX)
+modeling_df$LESIONED_HEMISPHERE = as.factor(modeling_df$LesionSide)
+modeling_df$NORMED_MOTOR_SOURCE = as.factor(modeling_df$NORMED_MOTOR_SOURCE)
+modeling_df$SITE = as.factor(modeling_df$SITE)
+```
