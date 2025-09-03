@@ -11,6 +11,13 @@ library(ggplot2)
 library(rmsb)
 library(rstanarm)
 library(kableExtra)
+library(dplyr)
+library(tibble)
+library(effects)
+library(ggridges)
+library(tidyr)
+library(tidybayes)
+source('pp_check_plot_blrm_v2.R')
 ```
 
 ```{r build_dag}
@@ -39,6 +46,7 @@ ggdag_dconnected(test_dag,from="Lesion_Load", to="Motor_Performance",
 
 ```{r}
 modeling_df$LesionSide <- as.factor(modeling_df$LesionSide)
+modeling_df[,c(2, 4, 9:21)] <- apply(modeling_df[,c(2, 4, 9:21)], 2, scale_0_to_1)
 dd <- datadist(modeling_df)
 options(datadist="dd")
 ```
@@ -117,3 +125,193 @@ weights_table
 
 writeLines(weights_table, 'save_path')
 ```
+
+```{r make_figure}
+library(ggplot2)
+library(patchwork)
+
+# ---- PANEL A: PPC plot ----
+p_a <- pp_check(mod12, ndraws=350)
+
+p_a <- p_a + theme_minimal() + ylab("Density") + 
+  xlab("Normalized Motor Score (0-1)") + 
+         ggtitle("A)") +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_a
+
+# ---- PANEL B: Relative Explained Variance ----
+
+a <- anova(mod12)
+
+df_b <- as.data.frame(a)
+
+# Preserve rownames as a variable
+df_b <- tibble::rownames_to_column(df_b, "Factor")
+
+df_b_clean <- df_b %>%
+  filter(!grepl("All.Interactions|Nonlinear|TOTAL", Factor, ignore.case = FALSE)) %>%
+  arrange(REV) %>%
+  mutate(Factor = factor(Factor, levels = Factor))
+
+levels(df_b_clean$Factor) <- c("Lesion Side", "Sensory CC", "Motor CC", "Max-WLL * M1 LL", "Age", "M1 LL", "Lesion Volume", "Max-WLL")
+
+# Plot
+p_b <- ggplot(df_b_clean, aes(x = REV, y = Factor)) +
+  geom_point(size = 3, color = "black") +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper),
+                 height = 0.25,
+                 color = "black",
+                 linewidth = 1.2) +  # thicker line
+  labs(
+    x = "Relative Explained Variation",
+    y = NULL,
+    title = "B)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust=-0.36),
+    axis.text = element_text(size = 12)
+  )
+
+p_b
+
+# ---- PANEL C: Effect plot ----
+p_c <- ggplot(Predict(mod12, name = "Total_Max_WLL_HCPA"))
+
+p_c <- p_c +
+  theme_minimal(base_size = 14) +
+  xlab("Max-WLL HCPA") +
+  ylab("Log Odds") + 
+  ggtitle("C)") +
+    theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_c
+
+
+# ---- PANEL D: Ridge plot ----
+# Extract draws
+# ------------------------------------------------------
+# 1. Define reference values for other covariates
+# ------------------------------------------------------
+ref_vals <- list(
+  Total_M1       = median(modeling_df$Total_M1, na.rm = TRUE),
+  Motor_CC       = median(modeling_df$Motor_CC, na.rm = TRUE),
+  Sensory_CC     = median(modeling_df$Sensory_CC, na.rm = TRUE),
+  AGE            = median(modeling_df$AGE, na.rm = TRUE),
+  LesionSide     = names(which.max(table(modeling_df$LesionSide))),
+  Lesion_Volume  = median(modeling_df$Lesion_Volume, na.rm = TRUE)
+)
+
+# ------------------------------------------------------
+# 2. Choose percentiles of the focal variable
+# ------------------------------------------------------
+qtiles <- quantile(modeling_df$Total_Max_WLL_HCPA, 
+                   probs = c(0.2, 0.25, 0.5, 0.75, 0.8, 0.9, 0.99), na.rm = TRUE)
+
+# ------------------------------------------------------
+# 3. Build contrast settings
+# ------------------------------------------------------
+make_contrast <- function(xval) {
+  modifyList(ref_vals, list(Total_Max_WLL_HCPA = xval))
+}
+
+# Example: 75th vs 25th percentile
+a <- make_contrast(qtiles[["99%"]])
+b <- make_contrast(qtiles[["75%"]])
+
+# ------------------------------------------------------
+# 4. Compute posterior contrast on latent scale
+# ------------------------------------------------------
+con_latent <- contrast(mod12, a, b)
+
+draws_df <- data.frame(
+  Contrast = con_latent$cdraws[,1],
+  Label = "90% vs 50%"
+)
+
+# Summary values from the contrast object
+mean_eff <- con_latent$Contrast
+ci_low   <- con_latent$Lower
+ci_high  <- con_latent$Upper
+pp       <- con_latent$PP   # posterior probability of direction
+
+# Create annotation text
+annot_text <- sprintf(
+  "Mean = %.3f\n95%% CrI = [%.3f, %.3f]\nApprox. p = %.3f",
+  mean_eff, ci_low, ci_high, pp
+)
+
+# Helper
+make_contrast <- function(x1, x2) {
+  a <- modifyList(ref_vals, list(Total_Max_WLL_HCPA = x1))
+  b <- modifyList(ref_vals, list(Total_Max_WLL_HCPA = x2))
+  contrast(mod12, a, b)
+}
+
+c25_75 <- make_contrast(qtiles[["75%"]], qtiles[["25%"]])
+c50_75 <- make_contrast(qtiles[["75%"]], qtiles[["50%"]])
+c75_99 <- make_contrast(qtiles[["99%"]], qtiles[["75%"]])
+c50_99 <- make_contrast(qtiles[["99%"]], qtiles[["50%"]])
+
+# Bind posterior draws
+draws_df <- rbind(
+  data.frame(Contrast = c25_75$cdraws[,1], Label = "75%\nvs\n25%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "75%\nvs\n50%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "99%\nvs\n75%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "99%\nvs\n50%")
+)
+
+# Ridgeplot of all
+p_d <- ggplot(draws_df, aes(x = Contrast, y = Label, fill = Label)) +
+  geom_density_ridges(alpha = 0.6, color = "white", scale=1, rel_min_height=0.01) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Effect on Latent Log-Odds of FMUE",
+    y = "Contrasts",
+    title = "D)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none",
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14, hjust=0.5),
+    axis.text = element_text(size = 8, hjust=0.5),
+    axis.text.y = element_text(hjust=0.5),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_d
+
+# ---- Combine panels ----
+# final_plot <- (
+#     plot_spacer() + p_a + plot_spacer() +
+#         plot_layout(widths = c(1, 10, 1))
+# ) /
+#     (p_b | p_c) +
+#     plot_annotation(
+#         theme = theme(plot.title = element_text(size = 18))
+#     )
+
+final_plot <- (p_a + p_b) / (p_c + p_d)
+
+
+# Save high-resolution figure
+ggsave("", final_plot, width=11, dpi = 600)
+
+```
+
+
+

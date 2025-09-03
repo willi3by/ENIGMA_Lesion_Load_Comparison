@@ -1,5 +1,5 @@
 ---
-title: "STRONG_Analysis"
+title: "ENIGMA_Analysis"
 author: "Brady Williamson"
 date: "2024-04-24"
 output: html_document
@@ -19,18 +19,13 @@ scale_0_to_1 <- function(x) {
 ```
 
 ```{r prep_data}
-lesion_load_df = read.csv('path_to_lesion_load_df')
-m1_cc_df = read.csv('path_to_m1_cc_df')
-demos_df = read.xlsx('path_to_demos', 1)
-site_df = read.xlsx('path_to_site_df', 1)
+lesion_load_df = read.csv()
+lesion_vol_df = read.csv()
+lesion_loc_df = read.xlsx()
+m1_cc_df = read.csv()
+demos_df = read.csv()
 colnames(demos_df)[1] <- colnames(lesion_load_df)[1]
-colnames(site_df)[1] <- colnames(lesion_load_df)[1]
-
-lesion_load_df$Lesion_Volume = log(lesion_load_df$Lesion_Volume + 1)
-lesion_left <- ifelse(lesion_load_df$HCPA_Left > lesion_load_df$HCPA_Right, 1, 2)
-lesion_load_df$Lesion.Side <- lesion_left
-lesion_bilat = ifelse(lesion_load_df$HCPA_Left > 0 & lesion_load_df$HCPA_Right > 0, 1, 0)
-lesion_load_df <- lesion_load_df[-which(lesion_bilat == 1),]
+reduced_demos_df = demos_df[,c(1,4:9, 12, 17, 61)]
 lesion_load_df$Total_Percsub_Cramer = lesion_load_df$Cramer_Left + lesion_load_df$Cramer_Right
 lesion_load_df$Total_Percsub_HCP = lesion_load_df$HCP_Left + lesion_load_df$HCP_Right
 lesion_load_df$Total_Percsub_HCPA = lesion_load_df$HCPA_Left + lesion_load_df$HCPA_Right
@@ -44,15 +39,28 @@ lesion_load_df$Total_Max_WLL_Cramer = lesion_load_df$Max_WLL_Cramer_Left + lesio
 lesion_load_df$Total_Max_WLL_HCP = lesion_load_df$Max_WLL_HCP_Left + lesion_load_df$Max_WLL_HCP_Right
 lesion_load_df$Total_Max_WLL_HCPA = lesion_load_df$Max_WLL_HCPA_Left + lesion_load_df$Max_WLL_HCPA_Right
 m1_cc_df$Total_M1 = m1_cc_df$Left_M1 + m1_cc_df$Right_M1
-demos_and_ll_df = merge(demos_df, lesion_load_df, by="Subject")
+reduced_lesion_load_df = lesion_load_df[,c(1, 26:37)]
+lesion_df = merge(reduced_lesion_load_df, lesion_vol_df, by="Subject")
+demos_and_ll_df = merge(reduced_demos_df, lesion_df, by="Subject")
+subj_idxs <- which(demos_and_ll_df$Subject %in% lesion_loc_df$Subject)
+lesion_loc_df <- lesion_loc_df[subj_idxs,]
+demos_and_ll_df = merge(demos_and_ll_df, lesion_loc_df, by="Subject")
 demos_and_ll_df = merge(demos_and_ll_df, m1_cc_df, by="Subject")
-demos_and_ll_df = merge(demos_and_ll_df, site_df, by="Subject")
 
-demos_and_ll_df <- demos_and_ll_df[-which(demos_and_ll_df$StrokeSubtype_0Ischem_1ICH == 1),]
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$Lesion.Location == 3),]
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$Lesion.Location == 4),]
+demos_and_ll_df = demos_and_ll_df[-which(demos_and_ll_df$LesionSide == 3),]
 
-modeling_df <- demos_and_ll_df[-which(is.na(demos_and_ll_df$v2_FMtotal)),]
-modeling_df <- modeling_df[,c(1, 4, 6, 7, 32:51)]
-modeling_df[,c(2:4, 6:23)] <- apply(modeling_df[,c(2:4, 6:23)], 2, scale)
-
-
+modeling_df = demos_and_ll_df[,c(1:7, 10:31)]
+modeling_df = na.omit(modeling_df)
+fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "FMUE_TOTAL" | modeling_df$NORMED_MOTOR_SOURCE == "MBI")
+# fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "FMUE_TOTAL")
+# fmue_and_mbi_idxs <- which(modeling_df$NORMED_MOTOR_SOURCE == "MBI")
+modeling_df = modeling_df[fmue_and_mbi_idxs,]
+low_n_sites <- names(which(table(modeling_df$SITE) < 5))
+modeling_df <- modeling_df[-which(modeling_df$SITE %in% low_n_sites),]
+modeling_df$SEX = as.factor(modeling_df$SEX)
+modeling_df$LESIONED_HEMISPHERE = as.factor(modeling_df$LesionSide)
+modeling_df$NORMED_MOTOR_SOURCE = as.factor(modeling_df$NORMED_MOTOR_SOURCE)
+modeling_df$SITE = as.factor(modeling_df$SITE)
 ```

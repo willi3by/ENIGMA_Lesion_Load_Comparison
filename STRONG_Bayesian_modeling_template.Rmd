@@ -1,0 +1,310 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+library(rstan)
+library(dagitty)
+library(ggdag)
+library(ggplot2)
+library(rmsb)
+library(rstanarm)
+library(kableExtra)
+library(dplyr)
+library(tibble)
+library(effects)
+library(ggridges)
+library(tidyr)
+library(tidybayes)
+source('pp_check_plot_blrm_v2.R')
+# library(rethinking)
+```
+
+```{r build_dag}
+test_dag <- dagify(Motor_Performance ~ Lesion_Load,
+                   Motor_Performance ~ Site,
+                   Lesion_Load ~ Site,
+                   Motor_Performance ~ AGE,
+                   Lesion_Load ~ Lesion_Volume,
+                   Motor_Performance ~ Lesion_Volume,
+                   Motor_Performance ~ Lesion.Side,
+                   AGE ~ Lesion.Side,
+                   Lesion_Volume ~ Lesion.Side,
+                   AGE ~ DAYS_POST_STROKE,
+                   Lesion_Load ~ DAYS_POST_STROKE,
+                   exposure = "Lesion_Load",
+                   outcome = "Motor_Performance")
+ggdag(test_dag)
+
+```
+
+```{r find_adjustment_sets}
+ggdag_adjustment_set(test_dag)
+ggdag_dconnected(test_dag,from="Lesion_Load", to="Motor_Performance", 
+                 controlling_for = c("AGE", "Lesion.Side", "Lesion_Volume", "Site"))
+```
+
+```{r}
+modeling_df[,c(3:6, 8:25)] <- apply(modeling_df[,c(3:6, 8:25)], 2, scale_0_to_1)
+dd <- datadist(modeling_df)
+options(datadist="dd")
+```
+
+
+```{r}
+mod1 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Percsub_Cramer, 3) + rcs(Total_M1, 3) + rcs(Total_Percsub_Cramer, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod2 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Percsub_HCP, 3) + rcs(Total_M1, 3) + rcs(Total_Percsub_HCP, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod3 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Percsub_HCPA, 3) + rcs(Total_M1, 3) + rcs(Total_Percsub_HCPA, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod4 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Radial_Cramer, 3) + rcs(Total_M1, 3) + rcs(Total_Radial_Cramer, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod5 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Radial_HCP, 3) + rcs(Total_M1, 3) + rcs(Total_Radial_HCP, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod6 <- blrm(v2_mRS ~ rcs(Total_Radial_HCPA, 3) + rcs(Total_M1, 3) + rcs(Total_Radial_HCPA, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod7 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_WLL_Cramer, 3) + rcs(Total_M1, 3) + rcs(Total_WLL_Cramer, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod8 <- blrm(v2_SIS_ADL_TOTAL~ rcs(Total_WLL_HCP, 3) + rcs(Total_M1, 3) + rcs(Total_WLL_HCP, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod9 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_WLL_HCPA, 3) + rcs(Total_M1, 3) + rcs(Total_WLL_HCPA, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod10 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Max_WLL_Cramer, 3) + rcs(Total_M1, 3) + rcs(Total_Max_WLL_Cramer, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod11 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Max_WLL_HCP, 3) + rcs(Total_M1, 3) + rcs(Total_Max_WLL_HCP, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) +  rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+
+mod12 <- blrm(v2_SIS_ADL_TOTAL ~ rcs(Total_Max_WLL_HCPA, 3) + rcs(Total_M1, 3) + rcs(Total_Max_WLL_HCPA, 3) %ia% rcs(Total_M1, 3) + rcs(Motor_CC, 3) + rcs(Sensory_CC, 3) + rcs(Age, 3) + Lesion.Side + rcs(Lesion_Volume, 3) + cluster(Enrollment.Site), data=modeling_df, chains=6, iter=20000)
+```
+
+```{r}
+weights = compareBmods(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod10, mod11, mod12)
+```
+
+```{r}
+# Convert named numeric array into a data frame
+names(weights) <- c("Original", "HCP", "HCPA", "Original", "HCP", "HCPA", "Original", "HCP", "HCPA", "Original", "HCP", "HCPA")
+
+weights_df <- data.frame(Model = names(weights), Weight = as.numeric(weights))
+
+# Define subheadings
+subheadings <- c("Grid-PS", "Radial-PS", "WLL", "Max WLL")
+
+# Add subheading rows every 3rd row
+# Create an empty data frame to store results
+formatted_df <- data.frame(Model = character(), Weight = character(), stringsAsFactors = FALSE)
+
+# Insert subheading rows
+subheading_counter <- 1
+for (i in seq_len(nrow(weights_df))) {
+  if ((i - 1) %% 3 == 0 && subheading_counter <= length(subheadings)) {
+    # Insert a subheading row from the subheadings list
+    formatted_df <- rbind(formatted_df, data.frame(Model = subheadings[subheading_counter], Weight = ""))
+    subheading_counter <- subheading_counter + 1
+  }
+  # Insert the original row
+  formatted_df <- rbind(formatted_df, data.frame(Model = weights_df$Model[i], Weight = sprintf("%.3f", weights_df$Weight[i])))
+}
+
+# Create the table using kable and kableExtra
+weights_table <- kable(formatted_df, "html", caption = "Model Weights from Stacking Method",
+                       col.names = c("Model", "Weight"), align = "c", escape = FALSE, row.names = FALSE) %>%
+  kable_styling(full_width = FALSE, font_size = 12) %>%
+  row_spec(which(formatted_df$Model %in% subheadings), 
+           bold = TRUE, 
+           background = "#D3D3D3", 
+           align = "c", 
+           extra_css = "font-weight: bold;") %>% # Format subheading rows
+  # Adjust rows with subheadings to span across both columns
+  row_spec(which(formatted_df$Model %in% subheadings), 
+           extra_css = "text-align: center;") %>%
+  kable_classic(full_width = FALSE, html_font = "Times New Roman")
+
+weights_table
+
+writeLines(weights_table, 'save_path')
+```
+
+```{r make_figure}
+# ---- PANEL A: PPC plot ----
+p_a <- pp_check(mod12, ndraws=350)
+
+p_a <- p_a + theme_minimal() + ylab("Density") + 
+  xlab("Normalized Motor Score (0-1)") + 
+         ggtitle("A)") +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_a
+
+# ---- PANEL B: Relative Explained Variance ----
+
+a <- anova(mod12)
+
+df_b <- as.data.frame(a)
+
+# Preserve rownames as a variable
+df_b <- tibble::rownames_to_column(df_b, "Factor")
+
+df_b_clean <- df_b %>%
+  filter(!grepl("All.Interactions|Nonlinear|TOTAL", Factor, ignore.case = FALSE)) %>%
+  arrange(REV) %>%
+  mutate(Factor = factor(Factor, levels = Factor))
+
+levels(df_b_clean$Factor) <- c("Lesion Side", "Motor CC", "Age", "Lesion Volume", "Sensory CC", "Max-WLL * M1 LL", "M1 LL", "Max-WLL")
+
+# Plot
+p_b <- ggplot(df_b_clean, aes(x = REV, y = Factor)) +
+  geom_point(size = 3, color = "black") +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper),
+                 height = 0.25,
+                 color = "black",
+                 linewidth = 1.2) +  # thicker line
+  labs(
+    x = "Relative Explained Variation",
+    y = NULL,
+    title = "B)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust=-0.25),
+    axis.text = element_text(size = 12)
+  )
+
+p_b
+
+# ---- PANEL C: Effect plot ----
+p_c <- ggplot(Predict(mod12, name = "Total_Max_WLL_HCPA"))
+
+p_c <- p_c +
+  theme_minimal(base_size = 14) +
+  xlab("Max-WLL HCPA") +
+  ylab("Log Odds") + 
+  ggtitle("C)") +
+    theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_c
+# ---- PANEL D: Ridge plot ----
+# Extract draws
+# ------------------------------------------------------
+# 1. Define reference values for other covariates
+# ------------------------------------------------------
+ref_vals <- list(
+  Total_M1       = median(modeling_df$Total_M1, na.rm = TRUE),
+  Motor_CC       = median(modeling_df$Motor_CC, na.rm = TRUE),
+  Sensory_CC     = median(modeling_df$Sensory_CC, na.rm = TRUE),
+  Age            = median(modeling_df$Age, na.rm = TRUE),
+  Lesion.Side     = names(which.max(table(modeling_df$Lesion.Side))),
+  Lesion_Volume  = median(modeling_df$Lesion_Volume, na.rm = TRUE)
+)
+
+# ------------------------------------------------------
+# 2. Choose percentiles of the focal variable
+# ------------------------------------------------------
+qtiles <- quantile(modeling_df$Total_Max_WLL_HCPA, 
+                   probs = c(0.2, 0.25, 0.5, 0.75, 0.8, 0.9, 0.99), na.rm = TRUE)
+
+# ------------------------------------------------------
+# 3. Build contrast settings
+# ------------------------------------------------------
+make_contrast <- function(xval) {
+  modifyList(ref_vals, list(Total_Max_WLL_HCPA = xval))
+}
+
+# Example: 75th vs 25th percentile
+a <- make_contrast(qtiles[["99%"]])
+b <- make_contrast(qtiles[["75%"]])
+
+# ------------------------------------------------------
+# 4. Compute posterior contrast on latent scale
+# ------------------------------------------------------
+con_latent <- contrast(mod12, a, b)
+
+draws_df <- data.frame(
+  Contrast = con_latent$cdraws[,1],
+  Label = "90% vs 50%"
+)
+
+# Summary values from the contrast object
+mean_eff <- con_latent$Contrast
+ci_low   <- con_latent$Lower
+ci_high  <- con_latent$Upper
+pp       <- con_latent$PP   # posterior probability of direction
+
+# Create annotation text
+annot_text <- sprintf(
+  "Mean = %.3f\n95%% CrI = [%.3f, %.3f]\nApprox. p = %.3f",
+  mean_eff, ci_low, ci_high, pp
+)
+
+# Helper
+make_contrast <- function(x1, x2) {
+  a <- modifyList(ref_vals, list(Total_Max_WLL_HCPA = x1))
+  b <- modifyList(ref_vals, list(Total_Max_WLL_HCPA = x2))
+  contrast(mod12, a, b)
+}
+
+c25_75 <- make_contrast(qtiles[["75%"]], qtiles[["25%"]])
+c50_75 <- make_contrast(qtiles[["75%"]], qtiles[["50%"]])
+c75_99 <- make_contrast(qtiles[["99%"]], qtiles[["75%"]])
+c50_99 <- make_contrast(qtiles[["99%"]], qtiles[["50%"]])
+
+# Bind posterior draws
+draws_df <- rbind(
+  data.frame(Contrast = c25_75$cdraws[,1], Label = "75%\nvs\n25%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "75%\nvs\n50%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "99%\nvs\n75%"),
+  data.frame(Contrast = c50_75$cdraws[,1], Label = "99%\nvs\n50%")
+)
+
+# Ridgeplot of all
+p_d <- ggplot(draws_df, aes(x = Contrast, y = Label, fill = Label)) +
+  geom_density_ridges(alpha = 0.6, color = "white", scale=1, rel_min_height=0.01) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Effect on Latent Log-Odds of FMUE",
+    y = "Contrasts",
+    title = "D)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none",
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14, hjust=0.5),
+    axis.text = element_text(size = 8, hjust=0.5),
+    axis.text.y = element_text(hjust=0.5),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+p_d
+
+# ---- Combine panels ----
+# final_plot <- (
+#     plot_spacer() + p_a + plot_spacer() +
+#         plot_layout(widths = c(1, 10, 1))
+# ) /
+#     (p_b | p_c) +
+#     plot_annotation(
+#         theme = theme(plot.title = element_text(size = 18))
+#     )
+
+final_plot <- (p_a + p_b) / (p_c + p_d)
+
+
+# Save high-resolution figure
+ggsave("", final_plot, width=11, dpi = 600)
+
+```
+
